@@ -184,7 +184,7 @@ extends:
               }
               # Avoid ever ending the BuildNumber with a `.` by always appending to it.
               $buildNumberName += ' #'
-              Write-Host "##vso[task.setvariable variable=BuildNumber;isoutput=true;isreadonly=true]$buildNumberName"
+              Write-Host "##vso[task.setvariable variable=FancyBuildNumber;isoutput=true;isreadonly=true]$buildNumberName"
               Write-Host "##vso[build.updatebuildnumber]$buildNumberName"
 
         - task: Powershell@2
@@ -276,30 +276,39 @@ extends:
             testRunTitle: 'Unit Tests'
           condition: and(succeededOrFailed(), ne(variables['SkipTests'], 'true'))
 
-        # We need to reset the BuildNumber before we pass off to Arcade
+        # Microbuild and our insertion tool use the build number in various places, and does not like the fancy number.
+        # Reset it here before we publish to microbuild and insert, then reset after.
         - powershell: Write-Host "##vso[build.updatebuildnumber]$(OriginalBuildNumber)"
           displayName: Reset BuildNumber
           condition: succeeded()
 
-      # Publish to Build Asset Registry
-      - template: /eng/common/templates-official/job/publish-build-assets.yml@self
-        parameters:
-          publishUsingPipelines: true
-          dependsOn:
-          - PRValidationBuild
-          pool:
-            name: VSEngSS-MicroBuild2022-1ES
+        - powershell: ls $(Build.SourcesDirectory)\artifacts\tmp\$(BuildConfiguration)\SymbolPackages
+          displayName: show symbols
+
+        # Use microbuild to publish symbols only to the internal feeds for PR val builds.
+        # We do not use arcade/darc as by default they get published to public feeds, and it is complicated
+        # to configure PR validation builds to push to an internal only channel.
+        # - task: MicroBuildArchiveSymbols@5
+        #   displayName: 'Upload Symbols to Symweb/MSDL'
+        #   inputs:
+        #     SymbolsFeatureName: 'RoslynPRValidation'
+        #     SymbolsProject: 'DDE'
+        #     SymbolsAgentPath: '$(Build.SourcesDirectory)\artifacts\tmp\$(BuildConfiguration)\SymbolPackages'
+        #     SubmitToInternet: false
+        #   condition: succeeded()
+
+        - powershell: |
+            Write-Host "BarId $(BARBuildId)" 
 
     - stage: insert
       dependsOn:
       - build
-      - publish_using_darc
       displayName: Insert to VS
 
       jobs:
       - job: insert
         variables:
-          FancyBuildNumber: $[stageDependencies.build.PRValidationBuild.outputs['FancyBuild.BuildNumber']]
+          FancyBuildNumber: $[stageDependencies.build.PRValidationBuild.outputs['FancyBuild.FancyBuildNumber']]
         displayName: Insert to VS
         pool:
           name: VSEngSS-MicroBuild2022-1ES
@@ -310,6 +319,10 @@ extends:
             $branchName = "$(Build.SourceBranch)".Substring("refs/heads/".Length)
             Write-Host "##vso[task.setvariable variable=ComponentBranchName]$branchName"
           displayName: Get Branch Name
+
+        - powershell: |
+            darc add-build-to-channel --id $(BARBuildId) --channel ".NET Internal Tooling" --azdev-pat "$(System.AccessToken)"
+
         - template: /eng/pipelines/insert.yml@self
           parameters:
             createDraftPR: true
@@ -327,18 +340,8 @@ extends:
             dropPath: '$(Pipeline.Workspace)\VSSetup'
             retainInsertedBuild: false
             cherryPick: ${{ parameters.VisualStudioCherryPickSHA }}
-        # Arcade is done so we can set BuildNumber back
+
         - powershell: Write-Host "##vso[build.updatebuildnumber]$(FancyBuildNumber)"
           displayName: Reset BuildNumber
           condition: succeeded()
 
-    # Use post-build to publish symbol packages.
-    - template: /eng/common/templates-official/post-build/post-build.yml@self
-      parameters:
-        publishingInfraVersion: 3
-        # Symbol validation is not entirely reliable as of yet, so should be turned off until
-        # https://github.com/dotnet/arcade/issues/2871 is resolved.
-        enableSymbolValidation: false
-        enableSigningValidation: false
-        enableSourceLinkValidation: false
-        SDLValidationParameters: false
