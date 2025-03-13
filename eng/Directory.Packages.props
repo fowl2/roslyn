@@ -56,10 +56,10 @@
     <!--
       Visual Studio
     -->
-    <PackageVersion Include="Microsoft.VisualStudio.SDK" Version="17.13.40008" />
+    <PackageVersion Include="Microsoft.VisualStudio.SDK" Version="17.14.39359" />
     <PackageVersion Include="Microsoft.Internal.VisualStudio.Shell.Framework" Version="17.9.36524" />
     <PackageVersion Include="Microsoft.ServiceHub.Client" Version="4.2.1017" />
-    <PackageVersion Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.13.40008" />
+    <PackageVersion Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.39359" />
     <PackageVersion Include="Microsoft.VisualStudio.Extensibility" Version="17.12.2037-preview3" />
     <PackageVersion Include="Microsoft.VisualStudio.Extensibility.JsonGenerators.Sdk" Version="17.12.2037-preview3" />
     <PackageVersion Include="Microsoft.VSSDK.Debugger.VSDConfigTool" Version="17.13.1100801-preview" />
@@ -96,15 +96,15 @@
     <PackageVersion Include="Microsoft.VisualStudio.Composition.Analyzers" Version="17.12.20" />
     <PackageVersion Include="Microsoft.VisualStudio.CoreUtility" Version="$(VisualStudioEditorPackagesVersion)" />
     <PackageVersion Include="Microsoft.VisualStudio.Editor" Version="$(VisualStudioEditorPackagesVersion)" />
-    <PackageVersion Include="Microsoft.VisualStudio.ImageCatalog" Version="17.13.40008" />
-    <PackageVersion Include="Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime" Version="17.13.40008" />
+    <PackageVersion Include="Microsoft.VisualStudio.ImageCatalog" Version="17.14.39359" />
+    <PackageVersion Include="Microsoft.VisualStudio.Imaging.Interop.14.0.DesignTime" Version="17.14.39359" />
     <PackageVersion Include="Microsoft.VisualStudio.Language" Version="$(VisualStudioEditorPackagesVersion)" />
     <PackageVersion Include="Microsoft.VisualStudio.Language.NavigateTo.Interfaces" Version="$(VisualStudioEditorPackagesVersion)" />
     <PackageVersion Include="Microsoft.VisualStudio.Language.StandardClassification" Version="$(VisualStudioEditorPackagesVersion)" />
     <PackageVersion Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.13.33" />
     <PackageVersion Include="Microsoft.VisualStudio.RemoteControl" Version="16.3.52" />
     <PackageVersion Include="Microsoft.VisualStudio.RpcContracts" Version="17.13.7" />
-    <PackageVersion Include="Microsoft.VisualStudio.Shell.15.0" Version="17.13.40008" />
+    <PackageVersion Include="Microsoft.VisualStudio.Shell.15.0" Version="17.14.39359" />
     <PackageVersion Include="Microsoft.VisualStudio.Telemetry" Version="17.14.2" />
     <PackageVersion Include="Microsoft.VisualStudio.Text.Data" Version="$(VisualStudioEditorPackagesVersion)" />
     <PackageVersion Include="Microsoft.VisualStudio.Text.Logic" Version="$(VisualStudioEditorPackagesVersion)" />
