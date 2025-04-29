@@ -184,7 +184,7 @@ extends:
               }
               # Avoid ever ending the BuildNumber with a `.` by always appending to it.
               $buildNumberName += ' #'
-              Write-Host "##vso[task.setvariable variable=FancyBuildNumber;isoutput=true;isreadonly=true]$buildNumberName"
+              Write-Host "##vso[task.setvariable variable=BuildNumber;isoutput=true;isreadonly=true]$buildNumberName"
               Write-Host "##vso[build.updatebuildnumber]$buildNumberName"
 
         - task: Powershell@2
@@ -276,29 +276,19 @@ extends:
             testRunTitle: 'Unit Tests'
           condition: and(succeededOrFailed(), ne(variables['SkipTests'], 'true'))
 
-        # Microbuild and our insertion tool use the build number in various places, and does not like the fancy number.
-        # Reset it here before we publish to microbuild and insert, then reset after.
+        # We need to reset the BuildNumber before we pass off to Arcade
         - powershell: Write-Host "##vso[build.updatebuildnumber]$(OriginalBuildNumber)"
           displayName: Reset BuildNumber
           condition: succeeded()
 
-        - powershell: ls $(Build.SourcesDirectory)\artifacts\tmp\$(BuildConfiguration)\SymbolPackages
-          displayName: show symbols
-
-        # Use microbuild to publish symbols only to the internal feeds for PR val builds.
-        # We do not use arcade/darc as by default they get published to public feeds, and it is complicated
-        # to configure PR validation builds to push to an internal only channel.
-        # - task: MicroBuildArchiveSymbols@5
-        #   displayName: 'Upload Symbols to Symweb/MSDL'
-        #   inputs:
-        #     SymbolsFeatureName: 'RoslynPRValidation'
-        #     SymbolsProject: 'DDE'
-        #     SymbolsAgentPath: '$(Build.SourcesDirectory)\artifacts\tmp\$(BuildConfiguration)\SymbolPackages'
-        #     SubmitToInternet: false
-        #   condition: succeeded()
-
-        - powershell: |
-            Write-Host "BarId $(BARBuildId)" 
+      # Publish to Build Asset Registry
+      - template: /eng/common/templates-official/job/publish-build-assets.yml@self
+        parameters:
+          publishUsingPipelines: true
+          dependsOn:
+          - PRValidationBuild
+          pool:
+            name: VSEngSS-MicroBuild2022-1ES
 
     - stage: insert
       dependsOn:
@@ -308,7 +298,8 @@ extends:
       jobs:
       - job: insert
         variables:
-          FancyBuildNumber: $[stageDependencies.build.PRValidationBuild.outputs['FancyBuild.FancyBuildNumber']]
+          - name: FancyBuildNumber
+            value: $[stageDependencies.build.PRValidationBuild.outputs['FancyBuild.BuildNumber']]
         displayName: Insert to VS
         pool:
           name: VSEngSS-MicroBuild2022-1ES
@@ -320,8 +311,21 @@ extends:
             Write-Host "##vso[task.setvariable variable=ComponentBranchName]$branchName"
           displayName: Get Branch Name
 
-        - powershell: |
-            darc add-build-to-channel --id $(BARBuildId) --channel ".NET Internal Tooling" --azdev-pat "$(System.AccessToken)"
+        # Make BarBuildId available.
+        - template: /eng/common/templates/post-build/setup-maestro-vars.yml@self
+
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: "Darc: Maestro Production"
+            scriptType: pscore
+            scriptLocation: inlineScript
+            inlineScript: |
+              $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2019-01-16'
+              $darcVersion = $(Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
+              $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
+              & dotnet tool update microsoft.dotnet.darc --version "$darcVersion" --add-source "$arcadeServicesSource" --tool-path $(Agent.ToolsDirectory)\darc -v n
+              & $(Agent.ToolsDirectory)\darc\darc add-build-to-channel --id $(BARBuildId) --channel ".NET Internal Tooling" --publishing-infra-version 3 --azdev-pat $(System.AccessToken)
+          displayName: Add build to internal tooling channel
 
         - template: /eng/pipelines/insert.yml@self
           parameters:
@@ -340,8 +344,20 @@ extends:
             dropPath: '$(Pipeline.Workspace)\VSSetup'
             retainInsertedBuild: false
             cherryPick: ${{ parameters.VisualStudioCherryPickSHA }}
-
+        # Arcade is done so we can set BuildNumber back
         - powershell: Write-Host "##vso[build.updatebuildnumber]$(FancyBuildNumber)"
           displayName: Reset BuildNumber
           condition: succeeded()
 
+    # # Use post-build to publish symbol packages.
+    # - template: /eng/common/templates-official/post-build/post-build.yml@self
+    #   parameters:
+    #     publishingInfraVersion: 3
+    #     # Symbol validation is not entirely reliable as of yet, so should be turned off until
+    #     # https://github.com/dotnet/arcade/issues/2871 is resolved.
+    #     enableSymbolValidation: false
+    #     enableSigningValidation: false
+    #     enableSourceLinkValidation: false
+    #     enableNugetValidation: false
+    #     SDLValidationParameters: false
+    #     PromoteToChannelIds: '551'
