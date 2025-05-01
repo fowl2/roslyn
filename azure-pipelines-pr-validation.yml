@@ -290,9 +290,39 @@ extends:
           pool:
             name: VSEngSS-MicroBuild2022-1ES
 
-    - stage: insert
+    - stage: publish
+      displayName: Publish
       dependsOn:
       - build
+      jobs:
+      - job: publishDarc
+        displayName: Publish using darc
+        pool:
+          name: VSEngSS-MicroBuild2022-1ES
+        steps:
+        # Make BarBuildId available.
+        - template: /eng/common/templates/post-build/setup-maestro-vars.yml@self
+
+        - template: /eng/pipelines/checkout-windows-task.yml@self
+
+        - powershell: |
+            $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2019-01-16'
+            $darcVersion = $(Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
+            $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
+            & dotnet tool update microsoft.dotnet.darc --version "$darcVersion" --add-source "$arcadeServicesSource" --tool-path $(Agent.ToolsDirectory)\darc -v n
+          displayName: Install darc tool
+
+        - task: AzureCLI@2
+          inputs:
+            azureSubscription: "Darc: Maestro Production"
+            scriptType: pscore
+            scriptLocation: inlineScript
+            inlineScript: $(Agent.ToolsDirectory)\darc\darc add-build-to-channel --id $(BARBuildId) --channel ".NET Internal Tooling" --publishing-infra-version 3 --azdev-pat $(System.AccessToken)
+          displayName: Add build to .NET Internal Tooling
+
+    - stage: insert
+      dependsOn:
+      - publish
       displayName: Insert to VS
 
       jobs:
@@ -310,22 +340,6 @@ extends:
             $branchName = "$(Build.SourceBranch)".Substring("refs/heads/".Length)
             Write-Host "##vso[task.setvariable variable=ComponentBranchName]$branchName"
           displayName: Get Branch Name
-
-        # Make BarBuildId available.
-        - template: /eng/common/templates/post-build/setup-maestro-vars.yml@self
-
-        - task: AzureCLI@2
-          inputs:
-            azureSubscription: "Darc: Maestro Production"
-            scriptType: pscore
-            scriptLocation: inlineScript
-            inlineScript: |
-              $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2019-01-16'
-              $darcVersion = $(Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
-              $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
-              & dotnet tool update microsoft.dotnet.darc --version "$darcVersion" --add-source "$arcadeServicesSource" --tool-path $(Agent.ToolsDirectory)\darc -v n
-              & $(Agent.ToolsDirectory)\darc\darc add-build-to-channel --id $(BARBuildId) --channel ".NET Internal Tooling" --publishing-infra-version 3 --azdev-pat $(System.AccessToken)
-          displayName: Add build to internal tooling channel
 
         - template: /eng/pipelines/insert.yml@self
           parameters:
